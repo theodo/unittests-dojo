@@ -37,4 +37,8 @@ public class DateUtils {
         return -round(-num);
       }
     }
+
+    public static boolean isStrictlyBefore(Date currentDate, Date beginDate) {
+                return false;
+    }
 }
