@@ -34,20 +34,29 @@ public class RiskEvaluatorClient {
 
             if(bloombergClientRisk.isOk()) {
                 if(securitiesIsin.length != bloombergClientRisk.getRisks().size()){
-                    logger.error("Bloomberg Service was not able to compute ALL risks");
-                    throw new Exception("Bloomberg Service was not able to compute ALL risks");
+                    logger.error("Bloomberg Service was unable to compute ALL requested risks");
+                    throw new Exception("Bloomberg Service was unable to compute ALL requested risks");
                 }
+
+                checkRisksAreConsistant(bloombergClientRisk);
 
                 return convertRisks(bloombergClientRisk);
 
             } else {
-                logger.error("Bloomberg Service was not able to compute risks and returned following error:" + bloombergClientRisk.getLastError());
+                logger.error("Bloomberg Service was unable to compute risks and returned following error:" + bloombergClientRisk.getLastError());
                 throw new Exception("Bloomberg Service raised an error: " + bloombergClientRisk.getLastError());
             }
         } catch (Exception e) {
-            logger.error("Bloomberg Service was not able to compute risks");
+            logger.error("Bloomberg Service was unable to compute risks");
             throw new Exception("Bloomberg Service raised an error: " + e.getMessage(), e);
         }
+    }
+
+
+
+
+    private boolean checkRisksAreConsistant(BloombergClient.RisksForSecurities bloombergClientRisk) {
+        return false;
     }
 
     @NotNull

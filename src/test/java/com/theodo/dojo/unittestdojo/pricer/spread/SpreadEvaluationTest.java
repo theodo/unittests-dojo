@@ -6,6 +6,7 @@ import com.theodo.dojo.unittestdojo.pricer.shift.ShiftProvider;
 import com.theodo.dojo.unittestdojo.pricer.yieldcurves.YieldCurve;
 import com.theodo.dojo.unittestdojo.pricer.yieldcurves.YieldCurveParser;
 import com.theodo.dojo.unittestdojo.pricer.yieldcurves.YieldCurveProvider;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Test;
@@ -24,9 +25,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @TestMethodOrder(MethodOrderer.Random.class)
 class SpreadEvaluationTest {
-    private static final String TOTAL_ISIN = "FR0000120271";
+    private static final String TOTAL_ISIN = "FR0000120271"; // Financial Spread calculation is iterative search and is 10e-6 precise
+    private static final double NO_SHIFT = 0.;
     private static final double ERROR_MARGIN = 0.000001;
-    private static double SHIFT = 0.005;
+    private static final double SHIFT_5_PERCENT = 0.05;
     private Map<String, YieldCurve> yieldCurves;
     private Map<String, CashFlows> cashFlowsByIsin;
 
@@ -34,50 +36,44 @@ class SpreadEvaluationTest {
     public void prepareData() {
         yieldCurves = YieldCurveParser.readFile("yieldCurves/curves.json");
         cashFlowsByIsin = CashFlowParser.readFile("cashFlows/cashFlowsForPricerTests.json");
-
-        SHIFT = 0;
     }
 
     @ParameterizedTest
     @MethodSource("provideCurveExpectedPriceAndDate")
     public void testSpreadCalculator(String curveName, Double price, String currentDate, Double expectedSpread) throws Exception {
-        CashFlows cashFlows = cashFlowsByIsin.get(TOTAL_ISIN);
+        SpreadEvaluation calculator = getSpreadCalculator(NO_SHIFT);
 
-        SpreadEvaluation calculator = SpreadEvaluation.createCalculator(cashFlows, curveProvider(), getShiftProvider());
         double spread = calculator.searchSpread(parseDate(currentDate), price, curveName);
+
         assertEquals(expectedSpread, spread, ERROR_MARGIN, "Check Expected Spread computed");
     }
 
     @Test
-    public void testSpreadCalculatorWithShift() throws Exception {
-        SHIFT = 0.05;
-        CashFlows cashFlows = cashFlowsByIsin.get(TOTAL_ISIN);
+    public void testSpreadCalculatorWithAdditionalShift() throws Exception {
+        SpreadEvaluation calculator = getSpreadCalculator(SHIFT_5_PERCENT);
 
-
-        SpreadEvaluation calculator = SpreadEvaluation.createCalculator(cashFlows, curveProvider(), getShiftProvider());
         double spread = calculator.searchSpread(parseDate("01/06/2004"), 200, "Euro Curve");
 
-        double expectedSpread = -0.0740670;
+        double expectedSpread = -0.0740670; // Computed by spread iterative approximations (dichotomy based searched)
         assertEquals(expectedSpread, spread, ERROR_MARGIN, "Check Expected Spread computed");
     }
 
 
     @Test
     public void testNonConvergence() {
-        CashFlows cashFlows = cashFlowsByIsin.get(TOTAL_ISIN);
+        SpreadEvaluation calculator = getSpreadCalculator(NO_SHIFT);
+        int nonConvergingPrice = 400;
 
-        SpreadEvaluation calculator = SpreadEvaluation.createCalculator(cashFlows, curveProvider(), getShiftProvider());
         Exception exception = assertThrows(Exception.class,
-                () -> calculator.searchSpread(parseDate("01/06/2006"), 400, "Euro Curve"));
+                () -> calculator.searchSpread(parseDate("01/06/2006"), nonConvergingPrice, "Euro Curve"));
 
         assertEquals("Calculator was not able to find a spread using convergence method", exception.getMessage());
     }
 
     @Test
     public void testCurveDoesNotExist() {
-        CashFlows cashFlows = cashFlowsByIsin.get(TOTAL_ISIN);
+        SpreadEvaluation calculator = getSpreadCalculator(NO_SHIFT);
 
-        SpreadEvaluation calculator = SpreadEvaluation.createCalculator(cashFlows, curveProvider(), getShiftProvider());
         Exception exception = assertThrows(Exception.class,
                 () -> calculator.searchSpread(parseDate("01/06/2006"), 100, "Unknown Curve"));
 
@@ -103,12 +99,18 @@ class SpreadEvaluationTest {
         );
     }
 
+    @NotNull
+    private SpreadEvaluation getSpreadCalculator(double shift) {
+        CashFlows cashFlows = cashFlowsByIsin.get(TOTAL_ISIN);
+        return SpreadEvaluation.createCalculator(cashFlows, curveProvider(), getShiftProvider(shift));
+    }
+
     private YieldCurveProvider curveProvider() {
         return curveName -> yieldCurves.get(curveName);
     }
 
-    private static ShiftProvider getShiftProvider() {
-        return () -> SHIFT;
+    private static ShiftProvider getShiftProvider(double shift) {
+        return () -> shift;
     }
 
 }
